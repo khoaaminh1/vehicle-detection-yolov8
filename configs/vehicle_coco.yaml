@@ -1,0 +1,9 @@
+path: /content/vehicle_project/vehicle_coco
+train: images/train2017
+val: images/val2017
+
+names:
+  0: car
+  1: motorcycle
+  2: bus
+  3: truck

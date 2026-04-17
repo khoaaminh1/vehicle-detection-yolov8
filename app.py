@@ -26,9 +26,9 @@ MODELS_DIR = os.path.join(ROOT_DIR, 'models')
 ASSETS_DIR = os.path.join(ROOT_DIR, 'assets')
 MODEL_FILES = [f for f in os.listdir(MODELS_DIR) if f.endswith('.pt')] if os.path.exists(MODELS_DIR) else []
 SAMPLE_IMAGES = [f for f in os.listdir(ASSETS_DIR) if f.lower().endswith(('.png', '.jpg', '.jpeg'))] if os.path.exists(ASSETS_DIR) else []
-CONFIDENCE_THRESHOLD = 0.45
-DISPLAY_CONFIDENCE_THRESHOLD = 0.60
-MIN_BOX_AREA_RATIO = 0.005
+CONFIDENCE_THRESHOLD = 0.55
+DISPLAY_CONFIDENCE_THRESHOLD = 0.75
+MIN_BOX_AREA_RATIO = 0.015
 
 # --- CUSTOM CSS ---
 def load_css():
@@ -133,6 +133,9 @@ def filter_reliable_boxes(result, image_size, min_conf: float, min_area_ratio: f
     if boxes is None or len(boxes) == 0:
         return None
 
+    # Optional: explicitly filter for vehicles if using a generic COCO model
+    # COCO vehicle classes: 2 (car), 3 (motorcycle), 5 (bus), 7 (truck)
+    # We will just ensure confidence is high enough to rule out weak non-vehicle detections
     conf_mask = boxes.conf >= min_conf
     if not conf_mask.any():
         return None
@@ -264,13 +267,13 @@ with col2:
             "Detection complete" if has_reliable
             else "No reliable vehicle detected. Please try a traffic or street-scene image."
         )
-        notice_class = "notice success" if has_reliable else "notice"
+        notice_class = "notice success" if has_reliable else "notice error"
         preview_html = (
             "<div class='preview-frame'>"
             "<div class='preview-grid'>"
             + "".join(items) +
             "</div>"
-            f"<div class='{notice_class}'>{notice_text}</div>"
+            f"<div class='{notice_class}' style='margin-top: 1rem;'>{notice_text}</div>"
             "</div>"
         )
         st.markdown(preview_html, unsafe_allow_html=True)
@@ -363,9 +366,12 @@ if st.session_state.detection_results:
     for result in st.session_state.detection_results:
         results_data.extend(result['data'])
 
+    # Global Stats
     if not results_data:
         st.markdown(
-            "<div class='notice'>No reliable vehicle detected. Please try a traffic or street-scene image.</div>",
+            "<div class='notice error' style='margin-top: 1rem; width: 100%; justify-content: center; padding: 1rem; font-size: 1rem;'>"
+            "No reliable vehicle detected in any of the images."
+            "</div>",
             unsafe_allow_html=True
         )
     else:
@@ -381,7 +387,7 @@ if st.session_state.detection_results:
             f"<div class='stat-card'><div class='stat-title'>Classes Found</div><div class='stat-value'>{class_counts.shape[0]}</div></div>",
             unsafe_allow_html=True
         )
-        active_model_name = st.session_state.active_model or selected_model or "-"
+        active_model_name = st.session_state.active_model or "-"
         st.markdown(
             f"<div class='stat-card'><div class='stat-title'>Active Model</div><div class='stat-value'>{active_model_name}</div></div>",
             unsafe_allow_html=True
@@ -393,21 +399,66 @@ if st.session_state.detection_results:
         )
         st.markdown(f"<div class='chip-row'>{chips}</div>", unsafe_allow_html=True)
 
-        st.markdown("---")
-        st.subheader("Detection TXT Outputs")
-        st.markdown("<div class='download-row'>", unsafe_allow_html=True)
-        for result in st.session_state.detection_results:
-            if result["txt"]:
-                filename = Path(result["name"]).stem + "_detections.txt"
-                st.download_button(
-                    label=f"Download {filename}",
-                    data=result["txt"],
-                    file_name=filename,
-                    mime="text/plain"
-                )
-        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("---")
+    st.subheader("Batch Results Breakdown")
+    
+    combined_txt_lines = []
+    
+    for result in st.session_state.detection_results:
+        img_name = result['name']
+        num_dets = len(result['data'])
+        
+        # UI Rendering
+        st.markdown(f"<h4 style='margin-top: 1.5rem;'>📄 {img_name}</h4>", unsafe_allow_html=True)
+        colA, colB = st.columns([1, 1.2], gap="large")
+        
+        with colA:
+            st.image(result['image'], use_container_width=True)
+        
+        with colB:
+            st.write(f"**Total detections:** {num_dets}")
+            if num_dets == 0:
+                st.info("No reliable vehicle detected")
+            else:
+                for obj in result['data']:
+                    st.write(f"- {obj['Class']} | {obj['Confidence']}")
 
+        # TXT Report building
+        combined_txt_lines.append(f"Image: {img_name}")
+        combined_txt_lines.append(f"Total detections: {num_dets}")
+        combined_txt_lines.append("")
+        
+        if num_dets == 0:
+            combined_txt_lines.append("* No reliable vehicle detected")
+        else:
+            for obj in result['data']:
+                conf_str = obj['Confidence']
+                # Convert "82.50%" -> 0.82 or keep original if conversion fails
+                try:
+                    if str(conf_str).endswith('%'):
+                        val_float = float(conf_str.replace('%', '')) / 100.0
+                        combined_txt_lines.append(f"* {obj['Class']} | {val_float:.2f}")
+                    else:
+                        combined_txt_lines.append(f"* {obj['Class']} | {conf_str}")
+                except Exception:
+                    combined_txt_lines.append(f"* {obj['Class']} | {conf_str}")
+                    
+        combined_txt_lines.append("")
+        if result != st.session_state.detection_results[-1]:
+            combined_txt_lines.append("-" * 40)
+            combined_txt_lines.append("")
 
+    st.markdown("---")
+    st.subheader("Export")
+    combined_txt_out = "\n".join(combined_txt_lines)
+    
+    st.download_button(
+        label="📄 Download TXT Report",
+        data=combined_txt_out,
+        file_name="batch_detection_report.txt",
+        mime="text/plain",
+        type="primary"
+    )
 
 st.markdown("---")
 st.markdown(

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 import io
 import os
+import asyncio
 from typing import List
 from pathlib import Path
 
@@ -52,8 +53,12 @@ async def run_detection(
 
         model = get_model(model_name)
 
-        # Perform detection
-        result_image_bytes, detected_objects = detect_vehicles(model, image)
+        # Perform detection synchronously in the main thread is blocking for other reqs.
+        # But FastApi lets us run logic that is CPU-bound gracefully if wrapped properly.
+        result_image_bytes, detected_objects = await asyncio.to_thread(detect_vehicles, model, image)
+
+        if len(detected_objects) == 0:
+            raise HTTPException(status_code=400, detail="No traffic detected in the image. Detection aborted.")
 
         await save_detection({
             "filename": file.filename,
@@ -65,6 +70,8 @@ async def run_detection(
             "image_b64": result_image_bytes,
             "detections": detected_objects
         }
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred during detection: {str(e)}")
 

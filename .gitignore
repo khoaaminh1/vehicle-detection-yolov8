@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+.env
+
+# Node
+node_modules/
+dist/
+npm-debug.log*
+
+# Models
+*.pt
+*.pth
+
+# OS
+.DS_Store

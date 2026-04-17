@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+ultralytics==8.0.196
+torch==2.5.1
+torchvision==0.20.1
+opencv-python
+pillow
+numpy
+pandas

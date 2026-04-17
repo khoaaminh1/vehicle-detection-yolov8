@@ -29,6 +29,38 @@ Two YOLOv8 variants were tested:
 - `assets/`: training result plots
 - `configs/`: dataset config files
 
+## Full-stack Demo (Frontend + Backend)
+
+This demo adds a FastAPI backend and a React frontend.
+
+### Backend
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+Optional MongoDB (store detections):
+
+```bash
+export MONGODB_URI="mongodb://localhost:27017"
+export MONGODB_DB="vehicle_detection"
+export MONGODB_COLLECTION="detections"
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open: `http://localhost:5173`
+
 ## Future Improvements
 - Build a Streamlit demo
 - Compare inference speed

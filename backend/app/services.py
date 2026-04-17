@@ -78,8 +78,15 @@ def detect_vehicles(model: YOLO, image: Image.Image):
             area = width * height
             
             # Simple threshold for confidence
-            if conf < 0.35:
+            # Very small tiny confidence often leads to wild misclassification (e.g. serum bottle -> car or bus)
+            if conf < 0.45:
                 continue
+
+            # Domain heuristics:
+            if aspect_ratio > 1.3 and class_name in ['car', 'bus', 'truck']:
+                # Very tall object claimed to be a car/bus is likely false positive
+                if conf < 0.70:
+                    continue
 
             # Keep valid objects
             detected_objects.append({
